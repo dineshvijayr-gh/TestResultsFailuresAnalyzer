@@ -21,7 +21,7 @@
         .badge-fail { background-color: #fee2e2; color: #991b1b; }
         .badge-skip { background-color: #fef3c7; color: #92400e; }
         .count-bubble { background: #3b82f6; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px; margin-left: 8px; font-weight: bold; }
-        pre { background: #f8fafc; padding: 8px; border-radius: 6px; font-size: 12px; overflow-x: auto; color: #ef4444; border-left: 3px solid #ef4444; margin: 4px 0 0 0; white-space: pre-wrap; word-break: break-all; }
+        pre { background: #f8fafc; padding: 8px; border-radius: 6px; font-size: 12px; overflow-x: auto; color: #ef4444; border-left: 3px solid #ef4444; margin: 4px 0 0 0; white-space: pre-wrap; word-break: break-all; max-height: 250px; }
     </style>
 </head>
 <body>
@@ -33,7 +33,7 @@
     <div id="drop-zone">Drag & Drop your Test Report HTML file here, or click to select</div>
     <input type="file" id="file-input" style="display: none;" accept=".html,.txt">
 
-    <!-- Section 1: Aggregated Summary -->
+    <!-- Summary Aggregation Matrix Table -->
     <div id="summary-card" class="card">
         <div class="card-title">Aggregated Error Signatures</div>
         <table id="summary-table">
@@ -48,7 +48,7 @@
         </table>
     </div>
 
-    <!-- Section 2: Detailed Breakdown -->
+    <!-- Log List Details Breakdown Table -->
     <div id="details-card" class="card">
         <div class="card-title">Detailed Failure Log Breakdown</div>
         <table id="details-table">
@@ -69,7 +69,6 @@
 const dropZone = document.getElementById('drop-zone');
 const fileInput = document.getElementById('file-input');
 
-// Setup persistent UI Event Listeners
 dropZone.addEventListener('click', () => fileInput.click());
 dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('hover'); });
 dropZone.addEventListener('dragleave', () => dropZone.classList.remove('hover'));
@@ -89,112 +88,130 @@ fileInput.addEventListener('change', (e) => {
 function processFile(file) {
     const reader = new FileReader();
     reader.onload = function(event) {
-        parseTestData(event.target.result);
+        parseTestDataFast(event.target.result);
     };
     reader.readAsText(file);
 }
 
-function parseTestData(text) {
-    // Split the report into array blocks using the markdown style header boundaries
-    const blocks = text.split(/#####\s+/);
+// Highly performance-optimized index boundaries strategy 
+function parseTestDataFast(text) {
     const summaryMap = {};
     const detailedRows = [];
+    
+    let searchIndex = 0;
+    const marker = "#####";
+    
+    // Find all indexes of '#####' boundaries in one fast loop step
+    const blockPositions = [];
+    while ((searchIndex = text.indexOf(marker, searchIndex)) !== -1) {
+        blockPositions.push(searchIndex);
+        searchIndex += marker.length;
+    }
+    
+    if (blockPositions.length === 0) {
+        alert("Could not process file. Ensure your log file contains standard '#####' test blocks.");
+        return;
+    }
 
-    // Begin looping past the initialization template header index
-    for (let i = 1; i < blocks.length; i++) {
+    // Slice individual blocks from position pointers maps
+    for (let i = 0; i < blockPositions.length; i++) {
         try {
-            const block = blocks[i].trim();
-            if (!block) continue;
-
-            const lines = block.split('\n');
-            if (lines.length === 0) continue;
-
-            // SAFE EXTRACTION: Fetch first string line and extract clean alphanumeric test case name
-            const rawFirstLine = lines[0].trim();
-            const testName = rawFirstLine ? rawFirstLine.split(/\s+/)[0] : `Unknown_Test_Case_${i}`;
-
-            // Parse framework metadata context paths safely
-            const suiteMatch = block.match(/- Suite name:\s*([^\n\r]+)/);
-            const moduleMatch = block.match(/- Test belong to module:\s*([^\n\r]+)/);
-            const suiteName = suiteMatch ? suiteMatch[1].trim() : 'Unknown Suite';
-            const moduleName = moduleMatch ? moduleMatch[1].trim() : 'Unknown Module';
-
-            // Match global layout lines that state failure or skips with concurrent timestamps
-            const logFailureRegex = /(?:Fail|Skip)\s+\d+:\d+:\d+\s+(?:AM|PM)\s+([\s\S]+)/i;
-            const hasFailureData = block.match(logFailureRegex);
-
-            if (hasFailureData) {
-                const isSkip = /Skip\s+\d+:\d+:\d+/i.test(block);
-                const status = isSkip ? 'SKIPPED' : 'FAILED';
-                
-                // Clean heavy visual data buffers out of stack streams
-                let traceSnippet = hasFailureData[0].trim();
-                traceSnippet = traceSnippet.replace(/(base64 img|base64\s+img)[\s\S]*/gi, '[Omitted Base64 Screenshot Stream]').trim();
-
-                // Abstract custom namespaces from common test exceptions
-                let exceptionType = "Custom Verification / Framework Failure";
-                const exceptionMatch = traceSnippet.match(/(org\.openqa\.selenium\.[A-Za-z0-9_]+Exception|java\.lang\.AssertionError|com\.ch\.reports\.[A-Za-z0-9_]+Exception|com\.ch\.utils\.[A-Za-z0-9_]+Error)/i);
-                
-                if (exceptionMatch) {
-                    exceptionType = exceptionMatch[1].split('.').pop();
-                }
-
-                // Isolate human-readable message header context line safely (FIXED: targeted the string primitive, not array)
-                const snippetLines = traceSnippet.split('\n');
-                let shortReason = snippetLines[0] ? snippetLines[0].replace(/^(Fail|Skip)\s+\d+:\d+:\d+\s*(?:AM|PM)?\s*/i, '').trim() : 'Unknown Error';
-                if (shortReason.includes('Build info:')) {
-                    shortReason = shortReason.split('Build info:')[0].trim();
-                }
-
-                // Add to matrix summary structural maps
-                if (!summaryMap[exceptionType]) {
-                    summaryMap[exceptionType] = { count: 0, examples: new Set() };
-                }
-                summaryMap[exceptionType].count++;
-                summaryMap[exceptionType].examples.add(shortReason);
-
-                detailedRows.push({
-                    name: testName,
-                    status: status,
-                    context: `${suiteName} / ${moduleName}`,
-                    trace: traceSnippet
-                });
-            }
-        } catch (innerError) {
-            console.error("Skipped anomalous log block row index processing item:", innerError);
-        }
-    }
-
-    renderUI(summaryMap, detailedRows);
-}
-
-function renderUI(summaryMap, detailedRows) {
-    const summaryBody = document.querySelector('#summary-table tbody');
-    summaryBody.innerHTML = '';
-    
-    const exceptionsList = Object.keys(summaryMap);
-    
-    if (exceptionsList.length === 0) {
-        summaryBody.innerHTML = '<tr><td colspan="3" style="text-align:center; padding:20px; color:#64748b;">No test failure exceptions detected in this log report.</td></tr>';
-    } else {
-        exceptionsList.forEach(exception => {
-            const row = document.createElement('tr');
-            const uniqueReasons = Array.from(summaryMap[exception].examples).map(r => `• ${escapeHtml(r)}`).join('<br>');
+            const start = blockPositions[i];
+            const end = (i + 1 < blockPositions.length) ? blockPositions[i+1] : text.length;
             
-            row.innerHTML = `
-                <td style="font-weight:600; color:#1e293b; padding:12px;">${exception}</td>
-                <td style="text-align:center; padding:12px;"><span class="count-bubble">${summaryMap[exception].count}</span></td>
-                <td style="color:#475569; font-family: monospace; font-size:12px; padding:12px; line-height:1.4;">${uniqueReasons}</td>
-            `;
-            summaryBody.appendChild(row);
-        });
-    }
+            let block = text.substring(start, end).trim();
+            if (!block) continue;
+            
+            // Clean base64 lines completely right away using linear indexing to avoid crashing strings
+            const base64Index = block.toLowerCase().indexOf("base64 img");
+            if (base64Index !== -1) {
+                block = block.substring(0, base64Index) + "\n[Omitted Base64 Screenshot Stream Data Artifacts]";
+            }
 
-    const detailsBody = document.querySelector('#details-table tbody');
-    detailsBody.innerHTML = '';
+            // Determine Fail vs Skip status metrics
+            let statusIndex = block.indexOf("Fail ");
+            let isSkip = false;
+            if (statusIndex === -1) {
+                statusIndex = block.indexOf("Fail\t");
+            }
+            if (statusIndex === -1) {
+                statusIndex = block.indexOf("Skip ");
+                if (statusIndex !== -1) isSkip = true;
+            }
+            if (statusIndex === -1) {
+                statusIndex = block.indexOf("Skip\t");
+                if (statusIndex !== -1) isSkip = true;
+            }
 
-    if (detailedRows.length === 0) {
-        detailsBody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px; color:#64748b;">No test breakdowns found.</td></tr>';
-    } else {
-        detailedRows.forEach(item => {
-            const row = document.createElement('tr');
+            // Skip block execution completely if it represents a passing run 
+            if (statusIndex === -1) continue; 
+
+            const status = isSkip ? 'SKIPPED' : 'FAILED';
+
+            // Extract Name (First line after #####)
+            const firstLineBreak = block.indexOf('\n');
+            let testName = "Unknown_Test_Case";
+            if (firstLineBreak !== -1) {
+                testName = block.substring(marker.length, firstLineBreak).trim();
+            }
+
+            // Framework contextual metadata parameters maps
+            let suiteName = "Default Suite";
+            let moduleName = "Core Module";
+            
+            const suiteIdx = block.indexOf("- Suite name:");
+            if (suiteIdx !== -1) {
+                const endLine = block.indexOf('\n', suiteIdx);
+                suiteName = block.substring(suiteIdx + 13, endLine !== -1 ? endLine : block.length).trim();
+            }
+            const moduleIdx = block.indexOf("- Test belong to module:");
+            if (moduleIdx !== -1) {
+                const endLine = block.indexOf('\n', moduleIdx);
+                moduleName = block.substring(moduleIdx + 24, endLine !== -1 ? endLine : block.length).trim();
+            }
+
+            // Isolate raw trace below the failure statement point
+            let traceSnippet = block.substring(statusIndex).trim();
+
+            // Locate specific Java target Exceptions thrown natively by Selenium configurations
+            let exceptionType = "Custom Verification / Framework Failure";
+            const exceptions = [
+                "NoSuchElementException", "TimeoutException", "StaleElementReferenceException", 
+                "ElementNotInteractableException", "WebDriverException", "AssertionError", "NullPointerException"
+            ];
+            
+            for (let eName of exceptions) {
+                if (traceSnippet.indexOf(eName) !== -1) {
+                    exceptionType = eName;
+                    break;
+                }
+            }
+
+            // Extract first short row summary phrase
+            const traceLineBreak = traceSnippet.indexOf('\n');
+            let shortReason = (traceLineBreak !== -1) ? traceSnippet.substring(0, traceLineBreak).trim() : traceSnippet;
+            
+            // Wipe build variables string logs out of description text spaces 
+            const buildInfoIdx = shortReason.indexOf("Build info:");
+            if (buildInfoIdx !== -1) {
+                shortReason = shortReason.substring(0, buildInfoIdx).trim();
+            }
+            
+            // Remove timestamp prefixes cleanly
+            shortReason = shortReason.replace(/^(Fail|Skip)\s+\d+:\d+:\d+\s*(?:AM|PM)?\s*/i, '').trim();
+
+            // Group counters allocations maps updates
+            if (!summaryMap[exceptionType]) {
+                summaryMap[exceptionType] = { count: 0, examples: new Set() };
+            }
+            summaryMap[exceptionType].count++;
+            summaryMap[exceptionType].examples.add(shortReason);
+
+            detailedRows.push({
+                name: testName,
+                status: status,
+                context: `${suiteName} / ${moduleName}`,
+                trace: traceSnippet
+            });
+
+        } catch (innerErr) {
