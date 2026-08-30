@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI-Ready Failure Failure Reason Aggregator</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f8; color: #333; margin: 0; padding: 40px; }
+        .container { max-width: 1100px; margin: 0 auto; }
+        h1 { color: #1e293b; margin-bottom: 8px; }
+        p { color: #64748b; margin-top: 0; margin-bottom: 24px; }
+        #drop-zone { border: 2px dashed #3b82f6; background-color: #eff6ff; border-radius: 12px; padding: 40px; text-align: center; color: #1d4ed8; font-weight: 500; cursor: pointer; transition: all 0.2s ease; margin-bottom: 32px; }
+        #drop-zone.hover { background-color: #dbeafe; border-color: #2563eb; }
+        .card { background: #fff; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); padding: 24px; margin-bottom: 24px; display: none; }
+        .card-title { font-size: 18px; font-weight: 600; margin-bottom: 16px; color: #0f172a; border-bottom: 2px solid #f1f5f9; padding-bottom: 8px; }
+        table { width: 100%; border-collapse: collapse; text-align: left; }
+        th { background-color: #f8fafc; color: #475569; font-weight: 600; padding: 12px 16px; border-bottom: 2px solid #e2e8f0; }
+        td { padding: 12px 16px; border-bottom: 1px solid #edf2f7; vertical-align: top; font-size: 14px; }
+        tr:hover { background-color: #f8fafc; }
+        .badge { display: inline-block; padding: 4px 8px; font-size: 11px; font-weight: 700; border-radius: 4px; text-transform: uppercase; }
+        .badge-fail { background-color: #fee2e2; color: #991b1b; }
+        .badge-skip { background-color: #fef3c7; color: #92400e; }
+        .count-bubble { background: #3b82f6; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px; margin-left: 8px; font-weight: bold; }
+        pre { background: #f8fafc; padding: 8px; border-radius: 6px; font-size: 12px; overflow-x: auto; color: #ef4444; border-left: 3px solid #ef4444; margin: 4px 0 0 0; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>📉 Test Automation Error Aggregator</h1>
+    <p>Zero configuration. Drag and drop your execution HTML or text log file below to categorize Selenium failure categories.</p>
+
+    <div id="drop-zone">Drag & Drop your Test Report HTML file here, or click to select</div>
+    <input type="file" id="file-input" style="display: none;" accept=".html,.txt">
+
+    <!-- Section 1: Failure Classification Categories Table -->
+    <div id="summary-card" class="card">
+        <div class="card-title">Aggregated Error Signatures</div>
+        <table id="summary-table">
+            <thead>
+                <tr>
+                    <th style="width: 30%;">Exception Category</th>
+                    <th style="width: 10%; text-align: center;">Impacted Tests</th>
+                    <th style="width: 60%;">Identified Root Cause Pattern / Dynamic Locators</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <!-- Section 2: Individual Impacted Test Line Items -->
+    <div id="details-card" class="card">
+        <div class="card-title">Detailed Failure Log Breakdown</div>
+        <table id="details-table">
+            <thead>
+                <tr>
+                    <th style="width: 25%;">Test Case Name</th>
+                    <th style="width: 10%;">Status</th>
+                    <th style="width: 15%;">Suite / Module</th>
+                    <th style="width: 50%;">Extracted Failure Snippet</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+const dropZone = document.getElementById('drop-zone');
+const fileInput = document.getElementById('file-input');
+
+// Handle UI drag and drop events
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('hover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('hover'));
+dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('hover');
+    if (e.dataTransfer.files.length > 0) processFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', (e) => {
+    if (e.target.files.length > 0) processFile(e.target.files[0]);
+});
+
+function processFile(file) {
+    const reader = new FileReader();
+    reader.onload = function(event) {
+        parseTestData(event.target.result);
+    };
+    reader.readAsText(file);
+}
+
+// Custom parser parsing log segments natively
+function parseTestData(text) {
+    // Split the report into block groups using the ##### test identifier header boundary
+    const blocks = text.split(/#####\s+/);
+    
+    const summaryMap = {};
+    const detailedRows = [];
+
+    // Skip the first block as it only contains document metadata headers
+    for (let i = 1; i < blocks.length; i++) {
+        const block = blocks[i];
+        const lines = block.split('\n');
+        
+        // Extract Test Title from the markdown header match line
+        const testName = lines[0].trim().split(/\s+/)[0];
+        
+        // Isolate attributes like Suite and Module names via inline tags
+        const suiteMatch = block.match(/- Suite name:\s*([^\n\r]+)/);
+        const moduleMatch = block.match(/- Test belong to module:\s*([^\n\r]+)/);
+        const suiteName = suiteMatch ? suiteMatch[1].trim() : 'Unknown';
+        const moduleName = moduleMatch ? moduleMatch[1].trim() : 'Unknown';
+
+        // Check for specific fail or skip structural lines
+        const failureLineIndex = lines.findIndex(l => l.includes('Fail ') || l.includes('Skip '));
+        
+        if (failureLineIndex !== -1) {
+            const rawStatusLine = lines[failureLineIndex];
+            const isSkip = rawStatusLine.includes('Skip ');
+            const status = isSkip ? 'SKIPPED' : 'FAILED';
+            
+            // Reconstruct everything below the failure row as our target traceback snippet
+            let rawStackTrace = lines.slice(failureLineIndex).join('\n').trim();
+            // Clean out base64 visual trace wrappers if present
+            rawStackTrace = rawStackTrace.replace(/base64 img[\s\S]*/g, '').trim();
+
+            // Match structural Java Class exceptions thrown by Selenium
+            let exceptionType = "Unknown / Custom Verification Failure";
+            const exceptionMatch = rawStackTrace.match(/(org\.openqa\.selenium\.[A-Za-z]+Exception|java\.lang\.AssertionError)/);
+            if (exceptionMatch) {
+                exceptionType = exceptionMatch[1].replace('org.openqa.selenium.', '');
+            }
+
+            // Extract the core technical reason details inside the exception line 
+            let keyReason = "Assertion validation failed during step run.";
+            const reasonLine = lines[failureLineIndex].split(/(Fail|Skip)\s+\d+:\d+:\d+\s+(AM|PM)\s+/)[3];
+            if (reasonLine) {
+                keyReason = reasonLine.trim();
+            }
+
+            // Populate Section 1 data aggregation maps
+            if (!summaryMap[exceptionType]) {
+                summaryMap[exceptionType] = { count: 0, examples: new Set() };
+            }
+            summaryMap[exceptionType].count++;
+            
+            // Clean up details line (like removing heavy structural build footprints) to optimize scanning readability
+            const cleanSummaryReason = keyReason.split('Build info:')[0].trim();
+            summaryMap[exceptionType].examples.add(cleanSummaryReason);
+
+            // Populate Section 2 item array
+            detailedRows.push({
+                name: testName,
+                status: status,
+                context: `${suiteName} / ${moduleName}`,
+                trace: rawStackTrace
+            });
+        }
+    }
+
+    renderUI(summaryMap, detailedRows);
+}
+
+function renderUI(summaryMap, detailedRows) {
+    // Render Table 1: Exception Aggregations
+    const summaryBody = document.querySelector('#summary-table tbody');
+    summaryBody.innerHTML = '';
+    
+    Object.keys(summaryMap).forEach(exception => {
+        const row = document.createElement('tr');
+        const uniqueReasons = Array.from(summaryMap[exception].examples).map(r => `• ${r}`).join('<br>');
+        
+        row.innerHTML = `
+            <td style="font-weight:600; color:#1e293b;">${exception}</td>
+            <td style="text-align:center;"><span class="count-bubble">${summaryMap[exception].count}</span></td>
+            <td style="color:#475569; font-family: monospace; font-size:12px;">${uniqueReasons}</td>
+        `;
+        summaryBody.appendChild(row);
+    });
+
+    // Render Table 2: Step Detail Lines
+    const detailsBody = document.querySelector('#details-table tbody');
+    detailsBody.innerHTML = '';
+
+    detailedRows.forEach(item => {
+        const row = document.createElement('tr');
+        const badgeClass = item.status === 'FAILED' ? 'badge-fail' : 'badge-skip';
+        
+        row.innerHTML = `
+            <td style="font-weight:500;">${item.name}</td>
+            <td><span class="badge ${badgeClass}">${item.status}</span></td>
+            <td style="color:#64748b; font-size:13px;">${item.context}</td>
+            <td><pre>${escapeHtml(item.trace)}</pre></td>
+        `;
+        detailsBody.appendChild(row);
+    });
+
+    // Show tables
+    document.getElementById('summary-card').style.display = 'block';
+    document.getElementById('details-card').style.display = 'block';
+}
+
+function escapeHtml(text) {
+    return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+</script>
+</body>
+</html>
