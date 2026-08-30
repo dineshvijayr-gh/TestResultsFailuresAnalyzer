@@ -33,7 +33,7 @@
     <div id="drop-zone">Drag & Drop your Test Report HTML file here, or click to select</div>
     <input type="file" id="file-input" style="display: none;" accept=".html,.txt">
 
-    <!-- Section 1: Aggregated Table Matrix View -->
+    <!-- Section 1: Aggregated Matrix -->
     <div id="summary-card" class="card">
         <div class="card-title">Aggregated Error Signatures Matrix</div>
         <table id="summary-table">
@@ -48,7 +48,7 @@
         </table>
     </div>
 
-    <!-- Section 2: Full Detailed Row Breakdown Box -->
+    <!-- Section 2: Detailed Item Breakdowns -->
     <div id="details-card" class="card">
         <div class="card-title">Detailed Failure Log Breakdown</div>
         <table id="details-table">
@@ -69,7 +69,7 @@
 const dropZone = document.getElementById('drop-zone');
 const fileInput = document.getElementById('file-input');
 
-// Setup persistent UI Event Listeners
+// Stable User Event Registration UI Listeners
 dropZone.addEventListener('click', () => fileInput.click());
 dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('hover'); });
 dropZone.addEventListener('dragleave', () => dropZone.classList.remove('hover'));
@@ -98,10 +98,10 @@ function parseAutomationLog(rawContent) {
     const summaryMap = {};
     const detailedRows = [];
 
-    // Split document processing boundaries using the structural header delimiter
+    // Split document processing chunks cleanly via the markdown boundary tags
     const blocks = rawContent.split("#####");
 
-    // Loop past entry index zero as it contains opening document HTML header junk assets
+    // Loop past entry 0 as it maps to the empty pre-document layout configuration header
     for (let i = 1; i < blocks.length; i++) {
         try {
             const block = blocks[i].trim();
@@ -110,10 +110,10 @@ function parseAutomationLog(rawContent) {
             const lines = block.split('\n');
             if (lines.length === 0) continue;
 
-            // Extract the descriptive Test Case ID/Title from line index 0 safely
-            const testName = lines[0].trim();
+            // FIXED: Extracted string primitive row target index zero properly without array mutations
+            const firstLine = lines[0].trim();
+            const testName = firstLine ? firstLine.split(/\s+/)[0] : `Test_Case_${i}`;
 
-            // Establish framework execution metrics flags scanning lines array linear path loops
             let isFailureBlock = false;
             let status = "FAILED";
             let failureLineText = "";
@@ -122,19 +122,18 @@ function parseAutomationLog(rawContent) {
             let suiteName = "Unknown Suite";
             let moduleName = "Unknown Module";
 
+            // Process text loops systematically down safe scalar properties
             for (let j = 0; j < lines.length; j++) {
                 const currentLine = lines[j].trim();
                 if (!currentLine) continue;
 
-                // Extract Suite name data metadata parameters
                 if (currentLine.includes("- Suite name:")) {
-                    suiteName = currentLine.split("- Suite name:")[1].trim();
+                    suiteName = currentLine.split("- Suite name:")[1]?.trim() || "Unknown Suite";
                 }
                 if (currentLine.includes("- Test belong to module:")) {
-                    moduleName = currentLine.split("- Test belong to module:")[1].trim();
+                    moduleName = currentLine.split("- Test belong to module:")[1]?.trim() || "Unknown Module";
                 }
 
-                // Identify explicit Fail or Skip status rows indicators
                 const hasFail = currentLine.includes("Fail ") || currentLine.includes("Fail\t");
                 const hasSkip = currentLine.includes("Skip ") || currentLine.includes("Skip\t");
 
@@ -142,21 +141,19 @@ function parseAutomationLog(rawContent) {
                     isFailureBlock = true;
                     status = hasSkip ? "SKIPPED" : "FAILED";
                     failureLineText = currentLine;
-                    
-                    // Capture trace payload starting from failure rows index bounds to block end termination points
                     fullStackTraceText = lines.slice(j).join('\n').trim();
                     break;
                 }
             }
 
-            // Clean heavy inline base64 images out of trace blocks to avoid crashing UI DOM performance grids
+            // Scrub resource-heavy base64 string segments out of details to keep browser table snappy
             if (fullStackTraceText.toLowerCase().includes("base64 img")) {
                 const imgIdx = fullStackTraceText.toLowerCase().indexOf("base64 img");
-                fullStackTraceText = fullStackTraceText.substring(0, imgIdx) + "\n[Omitted Base64 Screenshot Stream Data Asset]";
+                fullStackTraceText = fullStackTraceText.substring(0, imgIdx) + "\n[Omitted Base64 Screenshot Stream Data]";
             }
 
             if (isFailureBlock) {
-                // Classify technical Selenium exceptions categories namespaces 
+                // Classify technical Selenium exception identifiers
                 let exceptionClass = "Framework AssertionError";
                 const commonSeleniumExceptions = [
                     "NoSuchElementException", "TimeoutException", "ElementClickInterceptedException",
@@ -171,19 +168,17 @@ function parseAutomationLog(rawContent) {
                     }
                 }
 
-                // Isolate short reason by stripping out prefix localized timestamps clocks patterns
+                // Clean timestamps patterns prefixes out of short text summaries
                 let shortReason = failureLineText;
                 const cleanMatch = shortReason.match(/(?:Fail|Skip)\s+\d+:\d+:\d+\s*(?:AM|PM)?\s+([\s\S]+)/i);
                 if (cleanMatch && cleanMatch[1]) {
                     shortReason = cleanMatch[1].trim();
                 }
 
-                // Clean out system build information headers traces
                 if (shortReason.includes("Build info:")) {
                     shortReason = shortReason.split("Build info:")[0].trim();
                 }
 
-                // Populate dynamic group metric structures maps
                 if (!summaryMap[exceptionClass]) {
                     summaryMap[exceptionClass] = { count: 0, descriptions: new Set() };
                 }
@@ -199,7 +194,7 @@ function parseAutomationLog(rawContent) {
             }
 
         } catch (innerErr) {
-            console.error("Safely bypassed error segment block loop item row item parsing parameter:", innerErr);
+            console.error("Safely bypassed row item parsing parameters exception block:", innerErr);
         }
     }
 
@@ -213,3 +208,7 @@ function renderUI(summaryMap, detailedRows) {
     const exceptionsList = Object.keys(summaryMap);
     
     if (exceptionsList.length === 0) {
+        summaryBody.innerHTML = '<tr><td colspan="3" style="text-align:center; padding:20px; color:#64748b;">No test failure exceptions detected in this log report file.</td></tr>';
+    } else {
+        exceptionsList.forEach(exception => {
+            const row = document.createElement('tr');
