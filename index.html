@@ -69,87 +69,90 @@
 const dropZone = document.getElementById('drop-zone');
 const fileInput = document.getElementById('file-input');
 
-// Handle UI drag and drop events
 dropZone.addEventListener('click', () => fileInput.click());
 dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('hover'); });
 dropZone.addEventListener('dragleave', () => dropZone.classList.remove('hover'));
 dropZone.addEventListener('drop', (e) => {
     e.preventDefault();
     dropZone.classList.remove('hover');
-    if (e.dataTransfer.files.length > 0) processFile(e.dataTransfer.files[0]);
+    if (e.dataTransfer.files.length > 0) processFile(e.dataTransfer.files);
 });
 fileInput.addEventListener('change', (e) => {
-    if (e.target.files.length > 0) processFile(e.target.files[0]);
+    if (e.target.files.length > 0) processFile(e.target.files);
 });
 
-function processFile(file) {
+function processFile(files) {
     const reader = new FileReader();
     reader.onload = function(event) {
         parseTestData(event.target.result);
     };
-    reader.readAsText(file);
+    reader.readAsText(files[0]);
 }
 
-// Custom parser parsing log segments natively
 function parseTestData(text) {
-    // Split the report into block groups using the ##### test identifier header boundary
+    // Regex Split: Divide the log text body by markdown header flags safely
     const blocks = text.split(/#####\s+/);
     
     const summaryMap = {};
     const detailedRows = [];
 
-    // Skip the first block as it only contains document metadata headers
     for (let i = 1; i < blocks.length; i++) {
-        const block = blocks[i];
+        const block = blocks[i].trim();
+        if (!block) continue;
+
         const lines = block.split('\n');
-        
-        // Extract Test Title from the markdown header match line
+        // Extract the explicit title marker safely from line zero
         const testName = lines[0].trim().split(/\s+/)[0];
         
-        // Isolate attributes like Suite and Module names via inline tags
+        // Dynamic Attribute Extraction
         const suiteMatch = block.match(/- Suite name:\s*([^\n\r]+)/);
         const moduleMatch = block.match(/- Test belong to module:\s*([^\n\r]+)/);
-        const suiteName = suiteMatch ? suiteMatch[1].trim() : 'Unknown';
-        const moduleName = moduleMatch ? moduleMatch[1].trim() : 'Unknown';
+        const suiteName = suiteMatch ? suiteMatch[1].trim() : 'Unknown Suite';
+        const moduleName = moduleMatch ? moduleMatch[1].trim() : 'Unknown Module';
 
-        // Check for specific fail or skip structural lines
-        const failureLineIndex = lines.findIndex(l => l.includes('Fail ') || l.includes('Skip '));
-        
+        // Robust Check: Find any line starting with Fail or Skip followed immediately by timestamp
+        let failureLineIndex = -1;
+        let isSkip = false;
+
+        for (let j = 0; j < lines.length; j++) {
+            const currentLine = lines[j].trim();
+            if (/^(Fail|Skip)\s+\d+:\d+:\d+/i.test(currentLine)) {
+                failureLineIndex = j;
+                isSkip = /^\s*Skip/i.test(currentLine);
+                break;
+            }
+        }
+
         if (failureLineIndex !== -1) {
-            const rawStatusLine = lines[failureLineIndex];
-            const isSkip = rawStatusLine.includes('Skip ');
             const status = isSkip ? 'SKIPPED' : 'FAILED';
             
-            // Reconstruct everything below the failure row as our target traceback snippet
+            // Isolate trace below matching row index boundary
             let rawStackTrace = lines.slice(failureLineIndex).join('\n').trim();
-            // Clean out base64 visual trace wrappers if present
-            rawStackTrace = rawStackTrace.replace(/base64 img[\s\S]*/g, '').trim();
+            
+            // Optimization Step: Strip absolute base64 images so they do not choke the browser DOM tree
+            rawStackTrace = rawStackTrace.replace(/(base64 img|base64\s+img)[\s\S]*/gi, '[Extracted Screenshot Data Stream Removed]').trim();
 
-            // Match structural Java Class exceptions thrown by Selenium
-            let exceptionType = "Unknown / Custom Verification Failure";
-            const exceptionMatch = rawStackTrace.match(/(org\.openqa\.selenium\.[A-Za-z]+Exception|java\.lang\.AssertionError)/);
+            // Categorize common Selenium exception namespaces
+            let exceptionType = "Custom Assertion / Framework Failure";
+            const exceptionMatch = rawStackTrace.match(/(org\.openqa\.selenium\.[A-Za-z]+Exception|java\.lang\.AssertionError|com\.ch\.reports\.[A-Za-z]+Exception)/);
             if (exceptionMatch) {
-                exceptionType = exceptionMatch[1].replace('org.openqa.selenium.', '');
+                // Shorten common names for cleaner presentation (e.g. NoSuchElementException)
+                exceptionType = exceptionMatch[1].split('.').pop();
             }
 
-            // Extract the core technical reason details inside the exception line 
-            let keyReason = "Assertion validation failed during step run.";
-            const reasonLine = lines[failureLineIndex].split(/(Fail|Skip)\s+\d+:\d+:\d+\s+(AM|PM)\s+/)[3];
-            if (reasonLine) {
-                keyReason = reasonLine.trim();
+            // Isolate clean readable error messages
+            let cleanReason = lines[failureLineIndex].replace(/^(Fail|Skip)\s+\d+:\d+:\d+\s+(AM|PM)\s+/i, '').trim();
+            if (cleanReason.includes('Build info:')) {
+                cleanReason = cleanReason.split('Build info:')[0].trim();
             }
 
-            // Populate Section 1 data aggregation maps
+            // Aggregate map entries
             if (!summaryMap[exceptionType]) {
                 summaryMap[exceptionType] = { count: 0, examples: new Set() };
             }
             summaryMap[exceptionType].count++;
-            
-            // Clean up details line (like removing heavy structural build footprints) to optimize scanning readability
-            const cleanSummaryReason = keyReason.split('Build info:')[0].trim();
-            summaryMap[exceptionType].examples.add(cleanSummaryReason);
+            summaryMap[exceptionType].examples.add(cleanReason);
 
-            // Populate Section 2 item array
             detailedRows.push({
                 name: testName,
                 status: status,
@@ -163,24 +166,22 @@ function parseTestData(text) {
 }
 
 function renderUI(summaryMap, detailedRows) {
-    // Render Table 1: Exception Aggregations
     const summaryBody = document.querySelector('#summary-table tbody');
     summaryBody.innerHTML = '';
     
     Object.keys(summaryMap).forEach(exception => {
         const row = document.createElement('tr');
-        const uniqueReasons = Array.from(summaryMap[exception].examples).map(r => `• ${r}`).join('<br>');
+        const uniqueReasons = Array.from(summaryMap[exception].examples).map(r => `• ${escapeHtml(r)}`).join('<br>');
         
         row.innerHTML = `
-            <td style="font-weight:600; color:#1e293b;">${exception}</td>
-            <td style="text-align:center;"><span class="count-bubble">${summaryMap[exception].count}</span></td>
-            <td style="color:#475569; font-family: monospace; font-size:12px;">${uniqueReasons}</td>
+            <td style="font-weight:600; color:#1e293b; padding:12px;">${exception}</td>
+            <td style="text-align:center; padding:12px;"><span class="count-bubble">${summaryMap[exception].count}</span></td>
+            <td style="color:#475569; font-family: monospace; font-size:12px; padding:12px; line-height:1.4;">${uniqueReasons}</td>
         `;
         summaryBody.appendChild(row);
     });
 
-    // Render Table 2: Step Detail Lines
-    const detailsBody = document.querySelector('#details-table tbody');
+    const detailsBody = document.getElementById('details-table').getElementsByTagName('tbody')[0];
     detailsBody.innerHTML = '';
 
     detailedRows.forEach(item => {
@@ -188,21 +189,20 @@ function renderUI(summaryMap, detailedRows) {
         const badgeClass = item.status === 'FAILED' ? 'badge-fail' : 'badge-skip';
         
         row.innerHTML = `
-            <td style="font-weight:500;">${item.name}</td>
-            <td><span class="badge ${badgeClass}">${item.status}</span></td>
-            <td style="color:#64748b; font-size:13px;">${item.context}</td>
-            <td><pre>${escapeHtml(item.trace)}</pre></td>
+            <td style="font-weight:500; padding:12px;">${item.name}</td>
+            <td style="padding:12px;"><span class="badge ${badgeClass}">${item.status}</span></td>
+            <td style="color:#64748b; font-size:13px; padding:12px;">${item.context}</td>
+            <td style="padding:12px;"><pre>${escapeHtml(item.trace)}</pre></td>
         `;
         detailsBody.appendChild(row);
     });
 
-    // Show tables
     document.getElementById('summary-card').style.display = 'block';
     document.getElementById('details-card').style.display = 'block';
 }
 
 function escapeHtml(text) {
-    return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    return text ? text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") : '';
 }
 </script>
 </body>
