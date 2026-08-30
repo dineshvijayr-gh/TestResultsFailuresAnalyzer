@@ -4,211 +4,1022 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Test Automation Error Aggregator</title>
+
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f8; color: #333; margin: 0; padding: 40px; }
-        .container { max-width: 1100px; margin: 0 auto; }
-        h1 { color: #1e293b; margin-bottom: 8px; }
-        p { color: #64748b; margin-top: 0; margin-bottom: 24px; }
-        #drop-zone { border: 2px dashed #3b82f6; background-color: #eff6ff; border-radius: 12px; padding: 40px; text-align: center; color: #1d4ed8; font-weight: 500; cursor: pointer; transition: all 0.2s ease; margin-bottom: 32px; }
-        #drop-zone.hover { background-color: #dbeafe; border-color: #2563eb; }
-        .card { background: #fff; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); padding: 24px; margin-bottom: 24px; display: none; }
-        .card-title { font-size: 18px; font-weight: 600; margin-bottom: 16px; color: #0f172a; border-bottom: 2px solid #f1f5f9; padding-bottom: 8px; }
-        table { width: 100%; border-collapse: collapse; text-align: left; }
-        th { background-color: #f8fafc; color: #475569; font-weight: 600; padding: 12px 16px; border-bottom: 2px solid #e2e8f0; }
-        td { padding: 12px 16px; border-bottom: 1px solid #edf2f7; vertical-align: top; font-size: 14px; }
-        tr:hover { background-color: #f8fafc; }
-        .badge { display: inline-block; padding: 4px 8px; font-size: 11px; font-weight: 700; border-radius: 4px; text-transform: uppercase; }
-        .badge-fail { background-color: #fee2e2; color: #991b1b; }
-        .badge-skip { background-color: #fef3c7; color: #92400e; }
-        .count-bubble { background: #3b82f6; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px; margin-left: 8px; font-weight: bold; }
-        pre { background: #f8fafc; padding: 8px; border-radius: 6px; font-size: 12px; overflow-x: auto; color: #ef4444; border-left: 3px solid #ef4444; margin: 4px 0 0 0; white-space: pre-wrap; word-break: break-all; max-height: 250px; }
+        :root {
+            --primary: #2563eb;
+            --primary-light: #eff6ff;
+            --danger: #b91c1c;
+            --danger-light: #fee2e2;
+            --warning: #92400e;
+            --warning-light: #fef3c7;
+            --success: #166534;
+            --success-light: #dcfce7;
+            --border: #e2e8f0;
+            --text: #1e293b;
+            --muted: #64748b;
+            --background: #f4f6f8;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 40px;
+            background-color: var(--background);
+            color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        .container {
+            max-width: 1250px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            margin: 0 0 8px;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            margin: 0 0 24px;
+            color: var(--muted);
+        }
+
+        #drop-zone {
+            border: 2px dashed var(--primary);
+            border-radius: 12px;
+            background-color: var(--primary-light);
+            color: #1d4ed8;
+            padding: 36px;
+            margin-bottom: 24px;
+            text-align: center;
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.2s ease;
+        }
+
+        #drop-zone.hover {
+            background-color: #dbeafe;
+            border-color: #1d4ed8;
+        }
+
+        .card {
+            display: none;
+            margin-bottom: 24px;
+            padding: 24px;
+            background: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 4px 10px rgba(15, 23, 42, 0.08);
+        }
+
+        .card-title {
+            margin-bottom: 16px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #f1f5f9;
+            font-size: 18px;
+            font-weight: 700;
+        }
+
+        .summary-metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+        }
+
+        .metric {
+            padding: 18px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: #ffffff;
+        }
+
+        .metric-label {
+            color: var(--muted);
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .metric-value {
+            margin-top: 8px;
+            font-size: 28px;
+            font-weight: 800;
+        }
+
+        .metric-value.failed {
+            color: var(--danger);
+        }
+
+        .metric-value.skipped {
+            color: var(--warning);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            padding: 12px 14px;
+            border-bottom: 2px solid var(--border);
+            background: #f8fafc;
+            color: #475569;
+            text-align: left;
+            font-size: 13px;
+        }
+
+        td {
+            padding: 12px 14px;
+            border-bottom: 1px solid #edf2f7;
+            vertical-align: top;
+            font-size: 13px;
+        }
+
+        tr:hover {
+            background-color: #f8fafc;
+        }
+
+        .badge {
+            display: inline-block;
+            border-radius: 5px;
+            padding: 4px 8px;
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+        }
+
+        .badge-failed {
+            background: var(--danger-light);
+            color: var(--danger);
+        }
+
+        .badge-skipped {
+            background: var(--warning-light);
+            color: var(--warning);
+        }
+
+        .count-bubble {
+            display: inline-block;
+            min-width: 28px;
+            padding: 3px 8px;
+            border-radius: 12px;
+            background: var(--primary);
+            color: #ffffff;
+            text-align: center;
+            font-size: 12px;
+            font-weight: 800;
+        }
+
+        pre {
+            max-height: 250px;
+            margin: 0;
+            padding: 10px;
+            overflow: auto;
+            border-left: 3px solid #ef4444;
+            border-radius: 6px;
+            background: #f8fafc;
+            color: #991b1b;
+            font-family: Consolas, "Courier New", monospace;
+            font-size: 11px;
+            line-height: 1.45;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .empty-row {
+            padding: 18px;
+            color: var(--muted);
+            font-style: italic;
+            text-align: center;
+        }
+
+        .report-info {
+            margin-top: 14px;
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 20px;
+            }
+
+            .table-container {
+                overflow-x: auto;
+            }
+
+            table {
+                min-width: 900px;
+            }
+        }
     </style>
 </head>
-<body>
 
+<body>
 <div class="container">
     <h1>📉 Test Automation Error Aggregator</h1>
-    <p>Zero configuration. Drag and drop your execution HTML or text log file below to categorize Selenium failure categories.</p>
 
-    <div id="drop-zone">Drag & Drop your Test Report HTML file here, or click to select</div>
-    <input type="file" id="file-input" style="display: none;" accept=".html,.txt">
+    <p class="subtitle">
+        Upload a TestNG / Extent / WebChamp HTML report to identify failed and skipped tests,
+        Selenium exceptions, and failure patterns.
+    </p>
 
-    <!-- Section 1: Aggregated Matrix -->
-    <div id="summary-card" class="card">
-        <div class="card-title">Aggregated Error Signatures Matrix</div>
-        <table id="summary-table">
-            <thead>
-                <tr>
-                    <th style="width: 30%;">Exception / Failure Class</th>
-                    <th style="width: 15%; text-align: center;">Impacted Tests</th>
-                    <th style="width: 55%;">Identified Root Cause Patterns</th>
-                </tr>
-            </thead>
-            <tbody></tbody>
-        </table>
+    <div id="drop-zone">
+        Drag & Drop the test report HTML file here, or click to select
     </div>
 
-    <!-- Section 2: Detailed Item Breakdowns -->
+    <input id="file-input" type="file" accept=".html,.htm,.txt" style="display: none;">
+
+    <div id="metrics-card" class="card">
+        <div class="card-title">Report Summary</div>
+
+        <div class="summary-metrics">
+            <div class="metric">
+                <div class="metric-label">Failed Tests</div>
+                <div id="failed-count" class="metric-value failed">0</div>
+            </div>
+
+            <div class="metric">
+                <div class="metric-label">Skipped Tests</div>
+                <div id="skipped-count" class="metric-value skipped">0</div>
+            </div>
+
+            <div class="metric">
+                <div class="metric-label">Unique Failure Types</div>
+                <div id="exception-count" class="metric-value">0</div>
+            </div>
+
+            <div class="metric">
+                <div class="metric-label">Parsed Test Records</div>
+                <div id="parsed-count" class="metric-value">0</div>
+            </div>
+        </div>
+
+        <div id="report-info" class="report-info"></div>
+    </div>
+
+    <div id="summary-card" class="card">
+        <div class="card-title">Aggregated Error Signatures Matrix</div>
+
+        <div class="table-container">
+            <table id="summary-table">
+                <thead>
+                <tr>
+                    <th style="width: 28%;">Exception / Failure Class</th>
+                    <th style="width: 14%; text-align: center;">Impacted Tests</th>
+                    <th style="width: 58%;">Identified Root Cause Patterns</th>
+                </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+
     <div id="details-card" class="card">
         <div class="card-title">Detailed Failure Log Breakdown</div>
-        <table id="details-table">
-            <thead>
+
+        <div class="table-container">
+            <table id="details-table">
+                <thead>
                 <tr>
-                    <th style="width: 30%;">Test Case Name</th>
+                    <th style="width: 25%;">Test Case Name</th>
                     <th style="width: 10%;">Status</th>
                     <th style="width: 20%;">Suite / Module</th>
-                    <th style="width: 40%;">Extracted Failure Snippet</th>
+                    <th style="width: 45%;">Extracted Failure Snippet</th>
                 </tr>
-            </thead>
-            <tbody></tbody>
-        </table>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
     </div>
 </div>
 
 <script>
-const dropZone = document.getElementById('drop-zone');
-const fileInput = document.getElementById('file-input');
+    const dropZone = document.getElementById("drop-zone");
+    const fileInput = document.getElementById("file-input");
 
-// Stable User Event Registration UI Listeners
-dropZone.addEventListener('click', () => fileInput.click());
-dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('hover'); });
-dropZone.addEventListener('dragleave', () => dropZone.classList.remove('hover'));
-dropZone.addEventListener('drop', (e) => {
-    e.preventDefault();
-    dropZone.classList.remove('hover');
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-        processFile(e.dataTransfer.files[0]);
+    const metricsCard = document.getElementById("metrics-card");
+    const summaryCard = document.getElementById("summary-card");
+    const detailsCard = document.getElementById("details-card");
+
+    const summaryTableBody = document.querySelector("#summary-table tbody");
+    const detailsTableBody = document.querySelector("#details-table tbody");
+
+    const failedCountElement = document.getElementById("failed-count");
+    const skippedCountElement = document.getElementById("skipped-count");
+    const exceptionCountElement = document.getElementById("exception-count");
+    const parsedCountElement = document.getElementById("parsed-count");
+    const reportInfoElement = document.getElementById("report-info");
+
+    dropZone.addEventListener("click", function () {
+        fileInput.click();
+    });
+
+    dropZone.addEventListener("dragover", function (event) {
+        event.preventDefault();
+        dropZone.classList.add("hover");
+    });
+
+    dropZone.addEventListener("dragleave", function () {
+        dropZone.classList.remove("hover");
+    });
+
+    dropZone.addEventListener("drop", function (event) {
+        event.preventDefault();
+        dropZone.classList.remove("hover");
+
+        if (event.dataTransfer.files && event.dataTransfer.files.length > 0) {
+            processFile(event.dataTransfer.files[0]);
+        }
+    });
+
+    fileInput.addEventListener("change", function (event) {
+        if (event.target.files && event.target.files.length > 0) {
+            processFile(event.target.files[0]);
+        }
+    });
+
+    function processFile(file) {
+        resetResults();
+
+        const reader = new FileReader();
+
+        reader.onload = function (event) {
+            parseAutomationReport(event.target.result, file.name);
+        };
+
+        reader.onerror = function () {
+            dropZone.textContent = "Unable to read the selected file.";
+        };
+
+        reader.readAsText(file);
     }
-});
-fileInput.addEventListener('change', (e) => {
-    if (e.target.files && e.target.files.length > 0) {
-        processFile(e.target.files[0]);
+
+    function resetResults() {
+        summaryTableBody.innerHTML = "";
+        detailsTableBody.innerHTML = "";
+
+        metricsCard.style.display = "none";
+        summaryCard.style.display = "none";
+        detailsCard.style.display = "none";
+
+        failedCountElement.textContent = "0";
+        skippedCountElement.textContent = "0";
+        exceptionCountElement.textContent = "0";
+        parsedCountElement.textContent = "0";
+        reportInfoElement.textContent = "";
     }
-});
 
-function processFile(file) {
-    const reader = new FileReader();
-    reader.onload = function(event) {
-        parseAutomationLog(event.target.result);
-    };
-    reader.readAsText(file);
-}
+    function parseAutomationReport(rawHtml, fileName) {
+        const parser = new DOMParser();
+        const reportDocument = parser.parseFromString(rawHtml, "text/html");
 
-function parseAutomationLog(rawContent) {
-    const summaryMap = {};
-    const detailedRows = [];
+        const summaryMap = {};
+        const detailRows = [];
+        const processedSignatures = new Set();
 
-    // Split document processing chunks cleanly via the markdown boundary tags
-    const blocks = rawContent.split("#####");
+        const reportText = getNodeText(reportDocument.body);
 
-    // Loop past entry 0 as it maps to the empty pre-document layout configuration header
-    for (let i = 1; i < blocks.length; i++) {
-        try {
-            const block = blocks[i].trim();
-            if (!block) continue;
+        /*
+         * Strategy 1:
+         * Search likely test containers in TestNG / Extent / Spark / custom reports.
+         */
+        const likelyTestContainers = reportDocument.querySelectorAll(
+            [
+                ".test",
+                ".test-item",
+                ".test-case",
+                ".testcase",
+                ".test-node",
+                ".test-wrapper",
+                ".test-content",
+                ".test-view",
+                ".test-list-item",
+                ".test-detail",
+                ".node",
+                ".scenario",
+                ".scenario-container",
+                "tr",
+                "li"
+            ].join(",")
+        );
 
-            const lines = block.split('\n');
-            if (lines.length === 0) continue;
+        for (const container of likelyTestContainers) {
+            const containerText = getNodeText(container);
 
-            // FIXED: Extracted string primitive row target index zero properly without array mutations
-            const firstLine = lines[0].trim();
-            const testName = firstLine ? firstLine.split(/\s+/)[0] : `Test_Case_${i}`;
-
-            let isFailureBlock = false;
-            let status = "FAILED";
-            let failureLineText = "";
-            let fullStackTraceText = "";
-            
-            let suiteName = "Unknown Suite";
-            let moduleName = "Unknown Module";
-
-            // Process text loops systematically down safe scalar properties
-            for (let j = 0; j < lines.length; j++) {
-                const currentLine = lines[j].trim();
-                if (!currentLine) continue;
-
-                if (currentLine.includes("- Suite name:")) {
-                    suiteName = currentLine.split("- Suite name:")[1]?.trim() || "Unknown Suite";
-                }
-                if (currentLine.includes("- Test belong to module:")) {
-                    moduleName = currentLine.split("- Test belong to module:")[1]?.trim() || "Unknown Module";
-                }
-
-                const hasFail = currentLine.includes("Fail ") || currentLine.includes("Fail\t");
-                const hasSkip = currentLine.includes("Skip ") || currentLine.includes("Skip\t");
-
-                if (hasFail || hasSkip) {
-                    isFailureBlock = true;
-                    status = hasSkip ? "SKIPPED" : "FAILED";
-                    failureLineText = currentLine;
-                    fullStackTraceText = lines.slice(j).join('\n').trim();
-                    break;
-                }
+            if (!isPotentialTestBlock(containerText)) {
+                continue;
             }
 
-            // Scrub resource-heavy base64 string segments out of details to keep browser table snappy
-            if (fullStackTraceText.toLowerCase().includes("base64 img")) {
-                const imgIdx = fullStackTraceText.toLowerCase().indexOf("base64 img");
-                fullStackTraceText = fullStackTraceText.substring(0, imgIdx) + "\n[Omitted Base64 Screenshot Stream Data]";
+            const record = buildFailureRecord(container, containerText);
+
+            if (!record) {
+                continue;
             }
 
-            if (isFailureBlock) {
-                // Classify technical Selenium exception identifiers
-                let exceptionClass = "Framework AssertionError";
-                const commonSeleniumExceptions = [
-                    "NoSuchElementException", "TimeoutException", "ElementClickInterceptedException",
-                    "StaleElementReferenceException", "ElementNotInteractableException", "WebDriverException",
-                    "NullPointerException", "AssertionError", "FrameworkException"
-                ];
+            const uniqueKey = record.name + "|" + record.status + "|" + record.trace;
 
-                for (let exc of commonSeleniumExceptions) {
-                    if (fullStackTraceText.includes(exc)) {
-                        exceptionClass = exc;
-                        break;
-                    }
-                }
-
-                // Clean timestamps patterns prefixes out of short text summaries
-                let shortReason = failureLineText;
-                const cleanMatch = shortReason.match(/(?:Fail|Skip)\s+\d+:\d+:\d+\s*(?:AM|PM)?\s+([\s\S]+)/i);
-                if (cleanMatch && cleanMatch[1]) {
-                    shortReason = cleanMatch[1].trim();
-                }
-
-                if (shortReason.includes("Build info:")) {
-                    shortReason = shortReason.split("Build info:")[0].trim();
-                }
-
-                if (!summaryMap[exceptionClass]) {
-                    summaryMap[exceptionClass] = { count: 0, descriptions: new Set() };
-                }
-                summaryMap[exceptionClass].count++;
-                summaryMap[exceptionClass].descriptions.add(shortReason);
-
-                detailedRows.push({
-                    name: testName,
-                    status: status,
-                    context: `${suiteName} / ${moduleName}`,
-                    trace: fullStackTraceText
-                });
+            if (processedSignatures.has(uniqueKey)) {
+                continue;
             }
 
-        } catch (innerErr) {
-            console.error("Safely bypassed row item parsing parameters exception block:", innerErr);
+            processedSignatures.add(uniqueKey);
+            addRecord(summaryMap, detailRows, record);
+        }
+
+        /*
+         * Strategy 2:
+         * Some custom reports include logs inside script tags or plain HTML areas.
+         * Find exception text and get its closest useful parent container.
+         */
+        if (detailRows.length === 0) {
+            const exceptionNodes = reportDocument.querySelectorAll(
+                "pre, code, .exception, .error, .stacktrace, .stack-trace, .message, .log, .logs"
+            );
+
+            for (const node of exceptionNodes) {
+                const nodeText = getNodeText(node);
+
+                if (!containsFailureSignal(nodeText)) {
+                    continue;
+                }
+
+                const parent = findUsefulParent(node);
+                const parentText = getNodeText(parent);
+                const record = buildFailureRecord(parent, parentText);
+
+                if (!record) {
+                    continue;
+                }
+
+                const uniqueKey = record.name + "|" + record.status + "|" + record.trace;
+
+                if (processedSignatures.has(uniqueKey)) {
+                    continue;
+                }
+
+                processedSignatures.add(uniqueKey);
+                addRecord(summaryMap, detailRows, record);
+            }
+        }
+
+        /*
+         * Strategy 3:
+         * Parse text-format report sections, useful if the HTML stores details
+         * as raw text instead of semantic test elements.
+         */
+        if (detailRows.length === 0) {
+            const textRecords = parseTextBasedFailures(reportText);
+
+            for (const record of textRecords) {
+                const uniqueKey = record.name + "|" + record.status + "|" + record.trace;
+
+                if (processedSignatures.has(uniqueKey)) {
+                    continue;
+                }
+
+                processedSignatures.add(uniqueKey);
+                addRecord(summaryMap, detailRows, record);
+            }
+        }
+
+        renderMetrics(detailRows, summaryMap, fileName);
+        renderSummary(summaryMap);
+        renderDetails(detailRows);
+
+        if (detailRows.length === 0) {
+            dropZone.textContent =
+                "The report was loaded, but individual failed/skipped test blocks could not be identified. " +
+                "Check browser console output or update selectors for your report structure.";
+        } else {
+            dropZone.textContent =
+                "Processed " + detailRows.length +
+                " failed/skipped test record(s). Click or drop another report to analyze.";
         }
     }
 
-    renderUI(summaryMap, detailedRows);
-}
+    function isPotentialTestBlock(text) {
+        if (!text || text.length < 15 || text.length > 25000) {
+            return false;
+        }
 
-function renderUI(summaryMap, detailedRows) {
-    const summaryBody = document.querySelector('#summary-table tbody');
-    summaryBody.innerHTML = '';
-    
-    const exceptionsList = Object.keys(summaryMap);
-    
-    if (exceptionsList.length === 0) {
-        summaryBody.innerHTML = '<tr><td colspan="3" style="text-align:center; padding:20px; color:#64748b;">No test failure exceptions detected in this log report file.</td></tr>';
-    } else {
-        exceptionsList.forEach(exception => {
-            const row = document.createElement('tr');
+        return containsFailureSignal(text);
+    }
+
+    function containsFailureSignal(text) {
+        return /\b(failed|failure|fail|skipped|skip|assertionerror|timeoutexception|nosuchelementexception|webdriverexception|nullpointerexception)\b/i.test(text);
+    }
+
+    function buildFailureRecord(container, containerText) {
+        if (!containsFailureSignal(containerText)) {
+            return null;
+        }
+
+        const status = determineStatus(containerText);
+        const trace = extractFailureSnippet(container, containerText);
+
+        if (!trace) {
+            return null;
+        }
+
+        return {
+            name: extractTestName(container, containerText),
+            status: status,
+            context: extractContext(container, containerText),
+            trace: trace,
+            exceptionClass: getExceptionClass(trace),
+            shortReason: getShortReason(trace)
+        };
+    }
+
+    function determineStatus(text) {
+        const normalizedText = text.toLowerCase();
+
+        const failed =
+            normalizedText.includes("failed") ||
+            normalizedText.includes("failure") ||
+            normalizedText.includes("assertionerror") ||
+            normalizedText.includes("exception") ||
+            normalizedText.includes(" fail ");
+
+        if (failed) {
+            return "FAILED";
+        }
+
+        return "SKIPPED";
+    }
+
+    function extractTestName(container, containerText) {
+        const nameSelectors = [
+            ".test-name",
+            ".testcase-name",
+            ".test-title",
+            ".name",
+            ".title",
+            ".testName",
+            "[data-test-name]",
+            "h1",
+            "h2",
+            "h3",
+            "h4",
+            "h5",
+            "h6",
+            "td:first-child"
+        ];
+
+        for (const selector of nameSelectors) {
+            const element = container.querySelector(selector);
+
+            if (element) {
+                const text = getNodeText(element);
+
+                if (isValidTestName(text)) {
+                    return cleanTestName(text);
+                }
+            }
+        }
+
+        const lines = containerText
+            .split(/\r?\n/)
+            .map(line => line.trim())
+            .filter(line => line.length > 0);
+
+        for (const line of lines) {
+            if (isValidTestName(line) && !containsFailureSignal(line)) {
+                return cleanTestName(line);
+            }
+        }
+
+        return "Unknown Test";
+    }
+
+    function isValidTestName(text) {
+        if (!text || text.length < 3 || text.length > 250) {
+            return false;
+        }
+
+        return !/^(pass|passed|fail|failed|skip|skipped|error|exception)$/i.test(text.trim());
+    }
+
+    function cleanTestName(name) {
+        return name
+            .replace(/\b(PASS|PASSED|FAIL|FAILED|SKIP|SKIPPED)\b/gi, "")
+            .replace(/\s+/g, " ")
+            .trim();
+    }
+
+    function extractContext(container, containerText) {
+        let suiteName = "Unknown Suite";
+        let moduleName = "Unknown Module";
+
+        const suiteMatch = containerText.match(/suite\s*(name)?\s*[:=-]\s*([^\r\n]+)/i);
+        const moduleMatch = containerText.match(/module\s*(name)?\s*[:=-]\s*([^\r\n]+)/i);
+
+        const suiteElement = container.querySelector(
+            ".suite, .suite-name, [data-suite], [data-suite-name]"
+        );
+
+        const moduleElement = container.querySelector(
+            ".module, .module-name, [data-module], [data-module-name]"
+        );
+
+        if (suiteElement) {
+            suiteName =
+                suiteElement.getAttribute("data-suite") ||
+                suiteElement.getAttribute("data-suite-name") ||
+                getNodeText(suiteElement) ||
+                suiteName;
+        } else if (suiteMatch) {
+            suiteName = suiteMatch[2].trim();
+        }
+
+        if (moduleElement) {
+            moduleName =
+                moduleElement.getAttribute("data-module") ||
+                moduleElement.getAttribute("data-module-name") ||
+                getNodeText(moduleElement) ||
+                moduleName;
+        } else if (moduleMatch) {
+            moduleName = moduleMatch[2].trim();
+        }
+
+        return suiteName.trim() + " / " + moduleName.trim();
+    }
+
+    function extractFailureSnippet(container, fallbackText) {
+        const failureSelectors = [
+            ".exception",
+            ".exception-message",
+            ".stacktrace",
+            ".stack-trace",
+            ".error",
+            ".failure",
+            ".fail",
+            ".message",
+            ".log",
+            ".logs",
+            "pre",
+            "code"
+        ];
+
+        let snippet = "";
+
+        for (const selector of failureSelectors) {
+            const element = container.querySelector(selector);
+
+            if (element) {
+                const text = getNodeText(element);
+
+                if (containsFailureSignal(text) || isExceptionText(text)) {
+                    snippet = text;
+                    break;
+                }
+            }
+        }
+
+        if (!snippet) {
+            const failureStartIndex = findFailureStartIndex(fallbackText);
+            snippet = failureStartIndex >= 0
+                ? fallbackText.substring(failureStartIndex)
+                : fallbackText;
+        }
+
+        snippet = removeBase64Content(snippet);
+        snippet = snippet.trim();
+
+        if (snippet.length > 5000) {
+            snippet = snippet.substring(0, 5000) + "\n... [truncated]";
+        }
+
+        return snippet;
+    }
+
+    function findFailureStartIndex(text) {
+        const patterns = [
+            "NoSuchElementException",
+            "TimeoutException",
+            "ElementClickInterceptedException",
+            "ElementNotInteractableException",
+            "StaleElementReferenceException",
+            "AssertionError",
+            "WebDriverException",
+            "NullPointerException",
+            "FAILED",
+            "Failed",
+            "Failure",
+            "Skip",
+            "Skipped"
+        ];
+
+        let firstIndex = -1;
+
+        for (const pattern of patterns) {
+            const index = text.indexOf(pattern);
+
+            if (index >= 0 && (firstIndex === -1 || index < firstIndex)) {
+                firstIndex = index;
+            }
+        }
+
+        return firstIndex;
+    }
+
+    function isExceptionText(text) {
+        return /(Exception|Error|AssertionError)/i.test(text);
+    }
+
+    function removeBase64Content(text) {
+        const base64Index = text.toLowerCase().indexOf("base64");
+
+        if (base64Index >= 0) {
+            return text.substring(0, base64Index) +
+                "\n[Base64 screenshot content omitted]";
+        }
+
+        return text;
+    }
+
+    function getExceptionClass(trace) {
+        const exceptionTypes = [
+            "NoSuchElementException",
+            "TimeoutException",
+            "ElementClickInterceptedException",
+            "ElementNotInteractableException",
+            "ElementNotSelectableException",
+            "StaleElementReferenceException",
+            "InvalidSelectorException",
+            "SessionNotCreatedException",
+            "NoSuchSessionException",
+            "WebDriverException",
+            "JavascriptException",
+            "NullPointerException",
+            "AssertionError",
+            "FrameworkException"
+        ];
+
+        for (const exceptionType of exceptionTypes) {
+            if (trace.includes(exceptionType)) {
+                return exceptionType;
+            }
+        }
+
+        if (/skip|skipped/i.test(trace)) {
+            return "Skipped Test";
+        }
+
+        return "Framework AssertionError";
+    }
+
+    function getShortReason(trace) {
+        if (!trace) {
+            return "No failure message extracted.";
+        }
+
+        const lines = trace
+            .split(/\r?\n/)
+            .map(line => line.trim())
+            .filter(line => line.length > 0);
+
+        for (const line of lines) {
+            if (
+                line.includes("Exception") ||
+                line.includes("Error") ||
+                line.includes("expected") ||
+                line.includes("Actual") ||
+                line.includes("Failed") ||
+                line.includes("failed")
+            ) {
+                return trimReason(line);
+            }
+        }
+
+        return trimReason(lines[0] || "No failure message extracted.");
+    }
+
+    function trimReason(reason) {
+        return reason.length > 350
+            ? reason.substring(0, 350) + "..."
+            : reason;
+    }
+
+    function addRecord(summaryMap, detailRows, record) {
+        if (!summaryMap[record.exceptionClass]) {
+            summaryMap[record.exceptionClass] = {
+                count: 0,
+                descriptions: new Set()
+            };
+        }
+
+        summaryMap[record.exceptionClass].count++;
+        summaryMap[record.exceptionClass].descriptions.add(record.shortReason);
+
+        detailRows.push(record);
+    }
+
+    function parseTextBasedFailures(reportText) {
+        const records = [];
+        const lines = reportText.split(/\r?\n/);
+
+        let currentTestName = "Unknown Test";
+        let currentStatus = "";
+        let currentTrace = [];
+        let currentSuite = "Unknown Suite";
+        let currentModule = "Unknown Module";
+
+        function saveCurrentRecord() {
+            if (!currentStatus || currentTrace.length === 0) {
+                return;
+            }
+
+            const trace = removeBase64Content(currentTrace.join("\n")).trim();
+
+            records.push({
+                name: currentTestName,
+                status: currentStatus,
+                context: currentSuite + " / " + currentModule,
+                trace: trace,
+                exceptionClass: getExceptionClass(trace),
+                shortReason: getShortReason(trace)
+            });
+        }
+
+        for (const rawLine of lines) {
+            const line = rawLine.trim();
+
+            if (!line) {
+                continue;
+            }
+
+            const suiteMatch = line.match(/suite\s*(name)?\s*[:=-]\s*(.+)/i);
+            const moduleMatch = line.match(/module\s*(name)?\s*[:=-]\s*(.+)/i);
+
+            if (suiteMatch) {
+                currentSuite = suiteMatch[2].trim();
+            }
+
+            if (moduleMatch) {
+                currentModule = moduleMatch[2].trim();
+            }
+
+            const testMatch = line.match(/(?:test\s*(?:name)?|testcase)\s*[:=-]\s*(.+)/i);
+
+            if (testMatch) {
+                currentTestName = testMatch[1].trim();
+            }
+
+            if (/\b(FAILED|FAILURE|FAIL)\b/i.test(line)) {
+                saveCurrentRecord();
+                currentStatus = "FAILED";
+                currentTrace = [line];
+                continue;
+            }
+
+            if (/\b(SKIPPED|SKIP)\b/i.test(line) && !currentStatus) {
+                saveCurrentRecord();
+                currentStatus = "SKIPPED";
+                currentTrace = [line];
+                continue;
+            }
+
+            if (currentStatus) {
+                currentTrace.push(line);
+
+                if (currentTrace.length >= 30) {
+                    saveCurrentRecord();
+                    currentStatus = "";
+                    currentTrace = [];
+                }
+            }
+        }
+
+        saveCurrentRecord();
+        return records;
+    }
+
+    function findUsefulParent(element) {
+        let current = element;
+
+        for (let level = 0; level < 6; level++) {
+            if (!current.parentElement) {
+                break;
+            }
+
+            current = current.parentElement;
+
+            const text = getNodeText(current);
+
+            if (text.length >= 50 && text.length <= 15000) {
+                return current;
+            }
+        }
+
+        return element;
+    }
+
+    function getNodeText(node) {
+        return (node.innerText || node.textContent || "")
+            .replace(/\u00A0/g, " ")
+            .replace(/\r/g, "")
+            .trim();
+    }
+
+    function renderMetrics(detailRows, summaryMap, fileName) {
+        const failedTests = detailRows.filter(item => item.status === "FAILED").length;
+        const skippedTests = detailRows.filter(item => item.status === "SKIPPED").length;
+
+        failedCountElement.textContent = failedTests;
+        skippedCountElement.textContent = skippedTests;
+        exceptionCountElement.textContent = Object.keys(summaryMap).length;
+        parsedCountElement.textContent = detailRows.length;
+
+        reportInfoElement.textContent = "Analyzed report: " + fileName;
+
+        metricsCard.style.display = "block";
+    }
+
+    function renderSummary(summaryMap) {
+        const exceptionClasses = Object.keys(summaryMap);
+
+        if (exceptionClasses.length === 0) {
+            return;
+        }
+
+        summaryCard.style.display = "block";
+
+        exceptionClasses.sort(function (first, second) {
+            return summaryMap[second].count - summaryMap[first].count;
+        });
+
+        for (const exceptionClass of exceptionClasses) {
+            const record = summaryMap[exceptionClass];
+
+            const row = document.createElement("tr");
+
+            const exceptionCell = document.createElement("td");
+            exceptionCell.textContent = exceptionClass;
+
+            const countCell = document.createElement("td");
+            countCell.style.textAlign = "center";
+
+            const countBubble = document.createElement("span");
+            countBubble.className = "count-bubble";
+            countBubble.textContent = record.count;
+
+            countCell.appendChild(countBubble);
+
+            const reasonCell = document.createElement("td");
+            reasonCell.textContent = Array.from(record.descriptions).join(" | ");
+
+            row.appendChild(exceptionCell);
+            row.appendChild(countCell);
+            row.appendChild(reasonCell);
+
+            summaryTableBody.appendChild(row);
+        }
+    }
+
+    function renderDetails(detailRows) {
+        if (detailRows.length === 0) {
+            return;
+        }
+
+        detailsCard.style.display = "block";
+
+        for (const record of detailRows) {
+            const row = document.createElement("tr");
+
+            const nameCell = document.createElement("td");
+            nameCell.textContent = record.name;
+
+            const statusCell = document.createElement("td");
+
+            const badge = document.createElement("span");
+            badge.className =
+                record.status === "FAILED"
+                    ? "badge badge-failed"
+                    : "badge badge-skipped";
+
+            badge.textContent = record.status;
+            statusCell.appendChild(badge);
+
+            const contextCell = document.createElement("td");
+            contextCell.textContent = record.context;
+
+            const traceCell = document.createElement("td");
+            const traceBlock = document.createElement("pre");
+            traceBlock.textContent = record.trace;
+            traceCell.appendChild(traceBlock);
+
+            row.appendChild(nameCell);
+            row.appendChild(statusCell);
+            row.appendChild(contextCell);
+            row.appendChild(traceCell);
+
+            detailsTableBody.appendChild(row);
+        }
+    }
+</script>
+</body>
+</html>
