@@ -128,19 +128,20 @@ function parseTestData(text) {
                 const status = isSkip ? 'SKIPPED' : 'FAILED';
                 
                 // Clean heavy visual data buffers out of stack streams
-                let traceSnippet = hasFailureData[1].trim();
+                let traceSnippet = hasFailureData[0].trim();
                 traceSnippet = traceSnippet.replace(/(base64 img|base64\s+img)[\s\S]*/gi, '[Omitted Base64 Screenshot Stream]').trim();
 
                 // Abstract custom namespaces from common test exceptions
                 let exceptionType = "Custom Verification / Framework Failure";
-                const exceptionMatch = traceSnippet.match(/(org\.openqa\.selenium\.[A-Za-z0-9]+Exception|java\.lang\.AssertionError|com\.ch\.reports\.[A-Za-z0-9]+Exception)/);
+                const exceptionMatch = traceSnippet.match(/(org\.openqa\.selenium\.[A-Za-z0-9_]+Exception|java\.lang\.AssertionError|com\.ch\.reports\.[A-Za-z0-9_]+Exception|com\.ch\.utils\.[A-Za-z0-9_]+Error)/i);
                 
                 if (exceptionMatch) {
                     exceptionType = exceptionMatch[1].split('.').pop();
                 }
 
-                // Isolate human-readable message header context line
-                let shortReason = traceSnippet.split('\n')[0].trim();
+                // Isolate human-readable message header context line safely (FIXED: targeted the string primitive, not array)
+                const snippetLines = traceSnippet.split('\n');
+                let shortReason = snippetLines[0] ? snippetLines[0].replace(/^(Fail|Skip)\s+\d+:\d+:\d+\s*(?:AM|PM)?\s*/i, '').trim() : 'Unknown Error';
                 if (shortReason.includes('Build info:')) {
                     shortReason = shortReason.split('Build info:')[0].trim();
                 }
@@ -197,7 +198,3 @@ function renderUI(summaryMap, detailedRows) {
     } else {
         detailedRows.forEach(item => {
             const row = document.createElement('tr');
-            const badgeClass = item.status === 'FAILED' ? 'badge-fail' : 'badge-skip';
-            
-            row.innerHTML = `
-                <td style="font-weight:500; padding:12px; color:#0f172a;">${escapeHtml(item.name)}</td>
