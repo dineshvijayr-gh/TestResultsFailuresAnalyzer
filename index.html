@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI-Ready Failure Failure Reason Aggregator</title>
+    <title>Test Automation Error Aggregator</title>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f8; color: #333; margin: 0; padding: 40px; }
         .container { max-width: 1100px; margin: 0 auto; }
@@ -21,7 +21,7 @@
         .badge-fail { background-color: #fee2e2; color: #991b1b; }
         .badge-skip { background-color: #fef3c7; color: #92400e; }
         .count-bubble { background: #3b82f6; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px; margin-left: 8px; font-weight: bold; }
-        pre { background: #f8fafc; padding: 8px; border-radius: 6px; font-size: 12px; overflow-x: auto; color: #ef4444; border-left: 3px solid #ef4444; margin: 4px 0 0 0; }
+        pre { background: #f8fafc; padding: 8px; border-radius: 6px; font-size: 12px; overflow-x: auto; color: #ef4444; border-left: 3px solid #ef4444; margin: 4px 0 0 0; white-space: pre-wrap; word-break: break-all; }
     </style>
 </head>
 <body>
@@ -33,31 +33,31 @@
     <div id="drop-zone">Drag & Drop your Test Report HTML file here, or click to select</div>
     <input type="file" id="file-input" style="display: none;" accept=".html,.txt">
 
-    <!-- Section 1: Failure Classification Categories Table -->
+    <!-- Aggregated Summary Table -->
     <div id="summary-card" class="card">
         <div class="card-title">Aggregated Error Signatures</div>
         <table id="summary-table">
             <thead>
                 <tr>
                     <th style="width: 30%;">Exception Category</th>
-                    <th style="width: 10%; text-align: center;">Impacted Tests</th>
-                    <th style="width: 60%;">Identified Root Cause Pattern / Dynamic Locators</th>
+                    <th style="width: 15%; text-align: center;">Impacted Tests</th>
+                    <th style="width: 55%;">Identified Root Cause Patterns</th>
                 </tr>
             </thead>
             <tbody></tbody>
         </table>
     </div>
 
-    <!-- Section 2: Individual Impacted Test Line Items -->
+    <!-- Detailed Rows Breakdown -->
     <div id="details-card" class="card">
         <div class="card-title">Detailed Failure Log Breakdown</div>
         <table id="details-table">
             <thead>
                 <tr>
-                    <th style="width: 25%;">Test Case Name</th>
+                    <th style="width: 30%;">Test Case Name</th>
                     <th style="width: 10%;">Status</th>
-                    <th style="width: 15%;">Suite / Module</th>
-                    <th style="width: 50%;">Extracted Failure Snippet</th>
+                    <th style="width: 20%;">Suite / Module</th>
+                    <th style="width: 40%;">Extracted Failure Snippet</th>
                 </tr>
             </thead>
             <tbody></tbody>
@@ -75,89 +75,84 @@ dropZone.addEventListener('dragleave', () => dropZone.classList.remove('hover'))
 dropZone.addEventListener('drop', (e) => {
     e.preventDefault();
     dropZone.classList.remove('hover');
-    if (e.dataTransfer.files.length > 0) processFile(e.dataTransfer.files);
+    if (e.dataTransfer.files.length > 0) processFile(e.dataTransfer.files[0]);
 });
 fileInput.addEventListener('change', (e) => {
-    if (e.target.files.length > 0) processFile(e.target.files);
+    if (e.target.files.length > 0) processFile(e.target.files[0]);
 });
 
-function processFile(files) {
+function processFile(file) {
     const reader = new FileReader();
     reader.onload = function(event) {
         parseTestData(event.target.result);
     };
-    reader.readAsText(files[0]);
+    reader.readAsText(file);
 }
 
 function parseTestData(text) {
-    // Regex Split: Divide the log text body by markdown header flags safely
+    // Split on blocks using the markdown style headers present in the raw data stream
     const blocks = text.split(/#####\s+/);
     
     const summaryMap = {};
     const detailedRows = [];
 
+    // Process from index 1 as index 0 contains the opening log header junk data
     for (let i = 1; i < blocks.length; i++) {
         const block = blocks[i].trim();
         if (!block) continue;
 
         const lines = block.split('\n');
-        // Extract the explicit title marker safely from line zero
+        // Extract the Test Case ID/Title from the top row header string
         const testName = lines[0].trim().split(/\s+/)[0];
-        
-        // Dynamic Attribute Extraction
+
+        // Metadata extraction paths 
         const suiteMatch = block.match(/- Suite name:\s*([^\n\r]+)/);
         const moduleMatch = block.match(/- Test belong to module:\s*([^\n\r]+)/);
         const suiteName = suiteMatch ? suiteMatch[1].trim() : 'Unknown Suite';
         const moduleName = moduleMatch ? moduleMatch[1].trim() : 'Unknown Module';
 
-        // Robust Check: Find any line starting with Fail or Skip followed immediately by timestamp
-        let failureLineIndex = -1;
-        let isSkip = false;
+        // Direct target text matching scanning across the full context block globally
+        // Looks for string segments starting with Fail or Skip followed by localized timestamp clocks
+        const logFailureRegex = /(?:Fail|Skip)\s+\d+:\d+:\d+\s+(?:AM|PM)\s+([\s\S]+)/i;
+        const hasFailureData = block.match(logFailureRegex);
 
-        for (let j = 0; j < lines.length; j++) {
-            const currentLine = lines[j].trim();
-            if (/^(Fail|Skip)\s+\d+:\d+:\d+/i.test(currentLine)) {
-                failureLineIndex = j;
-                isSkip = /^\s*Skip/i.test(currentLine);
-                break;
-            }
-        }
-
-        if (failureLineIndex !== -1) {
+        if (hasFailureData) {
+            // Check original text to determine if it was explicitly flagged as Skip vs Fail
+            const isSkip = /Skip\s+\d+:\d+:\d+/i.test(block);
             const status = isSkip ? 'SKIPPED' : 'FAILED';
             
-            // Isolate trace below matching row index boundary
-            let rawStackTrace = lines.slice(failureLineIndex).join('\n').trim();
-            
-            // Optimization Step: Strip absolute base64 images so they do not choke the browser DOM tree
-            rawStackTrace = rawStackTrace.replace(/(base64 img|base64\s+img)[\s\S]*/gi, '[Extracted Screenshot Data Stream Removed]').trim();
+            // Clean out long data streams (like embedded base64 images) so they do not crash the table rows
+            let traceSnippet = hasFailureData[0].trim();
+            traceSnippet = traceSnippet.replace(/(base64 img|base64\s+img)[\s\S]*/gi, '[Extracted Base64 UI Image Artifact Block Omitted]').trim();
 
-            // Categorize common Selenium exception namespaces
-            let exceptionType = "Custom Assertion / Framework Failure";
-            const exceptionMatch = rawStackTrace.match(/(org\.openqa\.selenium\.[A-Za-z]+Exception|java\.lang\.AssertionError|com\.ch\.reports\.[A-Za-z]+Exception)/);
+            // Isolate standard Selenium java exception type targets
+            let exceptionType = "Custom Assertion / Verification Error";
+            const exceptionMatch = traceSnippet.match(/(org\.openqa\.selenium\.[A-Za-z0-9]+Exception|java\.lang\.AssertionError|com\.ch\.reports\.[A-Za-z0-9]+Exception)/);
+            
             if (exceptionMatch) {
-                // Shorten common names for cleaner presentation (e.g. NoSuchElementException)
+                // Strip structural namespaces, leaving just the core exception class name string
                 exceptionType = exceptionMatch[1].split('.').pop();
             }
 
-            // Isolate clean readable error messages
-            let cleanReason = lines[failureLineIndex].replace(/^(Fail|Skip)\s+\d+:\d+:\d+\s+(AM|PM)\s+/i, '').trim();
-            if (cleanReason.includes('Build info:')) {
-                cleanReason = cleanReason.split('Build info:')[0].trim();
+            // Extract a readable description line by cutting away systemic trace stack details
+            let shortReason = traceSnippet.split('\n')[0].replace(/^(Fail|Skip)\s+\d+:\d+:\d+\s+(AM|PM)\s+/i, '').trim();
+            if (shortReason.includes('Build info:')) {
+                shortReason = shortReason.split('Build info:')[0].trim();
             }
 
-            // Aggregate map entries
+            // Populate Map aggregations
             if (!summaryMap[exceptionType]) {
                 summaryMap[exceptionType] = { count: 0, examples: new Set() };
             }
             summaryMap[exceptionType].count++;
-            summaryMap[exceptionType].examples.add(cleanReason);
+            summaryMap[exceptionType].examples.add(shortReason);
 
+            // Save line item data arrays
             detailedRows.push({
                 name: testName,
                 status: status,
                 context: `${suiteName} / ${moduleName}`,
-                trace: rawStackTrace
+                trace: traceSnippet
             });
         }
     }
@@ -169,41 +164,35 @@ function renderUI(summaryMap, detailedRows) {
     const summaryBody = document.querySelector('#summary-table tbody');
     summaryBody.innerHTML = '';
     
-    Object.keys(summaryMap).forEach(exception => {
-        const row = document.createElement('tr');
-        const uniqueReasons = Array.from(summaryMap[exception].examples).map(r => `• ${escapeHtml(r)}`).join('<br>');
-        
-        row.innerHTML = `
-            <td style="font-weight:600; color:#1e293b; padding:12px;">${exception}</td>
-            <td style="text-align:center; padding:12px;"><span class="count-bubble">${summaryMap[exception].count}</span></td>
-            <td style="color:#475569; font-family: monospace; font-size:12px; padding:12px; line-height:1.4;">${uniqueReasons}</td>
-        `;
-        summaryBody.appendChild(row);
-    });
+    const exceptionsList = Object.keys(summaryMap);
+    
+    if (exceptionsList.length === 0) {
+        summaryBody.innerHTML = '<tr><td colspan="3" style="text-align:center; padding:20px; color:#64748b;">No test failure exceptions detected in this log report.</td></tr>';
+    } else {
+        exceptionsList.forEach(exception => {
+            const row = document.createElement('tr');
+            const uniqueReasons = Array.from(summaryMap[exception].examples).map(r => `• ${escapeHtml(r)}`).join('<br>');
+            
+            row.innerHTML = `
+                <td style="font-weight:600; color:#1e293b; padding:12px;">${exception}</td>
+                <td style="text-align:center; padding:12px;"><span class="count-bubble">${summaryMap[exception].count}</span></td>
+                <td style="color:#475569; font-family: monospace; font-size:12px; padding:12px; line-height:1.4;">${uniqueReasons}</td>
+            `;
+            summaryBody.appendChild(row);
+        });
+    }
 
-    const detailsBody = document.getElementById('details-table').getElementsByTagName('tbody')[0];
+    const detailsBody = document.querySelector('#details-table tbody');
     detailsBody.innerHTML = '';
 
-    detailedRows.forEach(item => {
-        const row = document.createElement('tr');
-        const badgeClass = item.status === 'FAILED' ? 'badge-fail' : 'badge-skip';
-        
-        row.innerHTML = `
-            <td style="font-weight:500; padding:12px;">${item.name}</td>
-            <td style="padding:12px;"><span class="badge ${badgeClass}">${item.status}</span></td>
-            <td style="color:#64748b; font-size:13px; padding:12px;">${item.context}</td>
-            <td style="padding:12px;"><pre>${escapeHtml(item.trace)}</pre></td>
-        `;
-        detailsBody.appendChild(row);
-    });
-
-    document.getElementById('summary-card').style.display = 'block';
-    document.getElementById('details-card').style.display = 'block';
-}
-
-function escapeHtml(text) {
-    return text ? text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") : '';
-}
-</script>
-</body>
-</html>
+    if (detailedRows.length === 0) {
+        detailsBody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px; color:#64748b;">No test breakdowns found.</td></tr>';
+    } else {
+        detailedRows.forEach(item => {
+            const row = document.createElement('tr');
+            const badgeClass = item.status === 'FAILED' ? 'badge-fail' : 'badge-skip';
+            
+            row.innerHTML = `
+                <td style="font-weight:500; padding:12px; color:#0f172a;">${escapeHtml(item.name)}</td>
+                <td style="padding:12px;"><span class="badge ${badgeClass}">${item.status}</span></td>
+                <td style="color:#64748b; font-size:13px; padding:12px;">${escapeHtml(item.context)}</td>
